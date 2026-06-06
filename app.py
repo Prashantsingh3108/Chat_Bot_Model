@@ -6,116 +6,151 @@ from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
-# Load environment variables
+# ---------------- LOAD ENV ----------------
+
 load_dotenv()
 
-# ---------------- PAGE CONFIG ---------------- #
+# ---------------- STREAMLIT CONFIG ----------------
 
 st.set_page_config(
-    page_title="RAG Chatbot",
-    page_icon="🤖",
-    layout="centered"
+page_title="RAG Chatbot",
+page_icon="🤖",
+layout="centered"
 )
 
 st.title("🤖 RAG Chatbot")
-st.write("Ask questions from your uploaded knowledge base.")
+st.write("Ask questions from your knowledge base.")
 
-# ---------------- API KEY CHECK ---------------- #
+# ---------------- API KEY ----------------
 
 groq_api_key = os.getenv("GROQ_API_KEY")
 
 if not groq_api_key:
-    st.error("❌ GROQ_API_KEY not found in environment variables.")
-    st.stop()
+st.error("❌ GROQ_API_KEY not found.")
+st.stop()
 
-# ---------------- LOAD MODEL ---------------- #
+# ---------------- LOAD LLM ----------------
 
 @st.cache_resource
 def load_llm():
-    return ChatGroq(
-        groq_api_key=groq_api_key,
-        model_name="llama-3.3-70b-versatile",
-        temperature=0
-    )
+return ChatGroq(
+groq_api_key=groq_api_key,
+model_name="llama-3.3-70b-versatile",
+temperature=0
+)
 
-# ---------------- LOAD EMBEDDINGS ---------------- #
+# ---------------- LOAD EMBEDDINGS ----------------
 
 @st.cache_resource
 def load_embeddings():
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-mpnet-base-v2"
-    )
+return HuggingFaceEmbeddings(
+model_name="sentence-transformers/all-mpnet-base-v2"
+)
 
-# ---------------- LOAD VECTOR DATABASE ---------------- #
+# ---------------- LOAD VECTOR DB ----------------
 
 @st.cache_resource
 def load_vectorstore():
 
-    embeddings = load_embeddings()
+```
+embeddings = load_embeddings()
 
-    vectorstore = Chroma(
-        persist_directory="./chroma_db",
-        embedding_function=embeddings
-    )
+vectorstore = Chroma(
+    persist_directory="./chroma_db",
+    embedding_function=embeddings
+)
 
-    return vectorstore
+return vectorstore
+```
 
-# ---------------- INITIALIZE ---------------- #
+# ---------------- INITIALIZATION ----------------
 
 try:
-    llm = load_llm()
-    vector_store = load_vectorstore()
+llm = load_llm()
+vector_store = load_vectorstore()
 
 except Exception as e:
-    st.error(f"❌ Error loading app: {e}")
-    st.stop()
+st.error(f"❌ Failed to load application: {e}")
+st.stop()
 
-# ---------------- USER INPUT ---------------- #
+# ---------------- CHAT HISTORY ----------------
 
-query = st.text_input("Enter your question:")
+if "messages" not in st.session_state:
+st.session_state.messages = []
 
-if st.button("Submit"):
+# Display old messages
 
-    if query.strip() == "":
-        st.warning("Please enter a question.")
-    
-    else:
+for msg in st.session_state.messages:
+with st.chat_message(msg["role"]):
+st.markdown(msg["content"])
 
-        with st.spinner("Searching documents..."):
+# ---------------- USER INPUT ----------------
 
-            try:
+user_query = st.chat_input("Ask your question...")
 
-                # similarity search
-                results = vector_store.similarity_search(query, k=5)
+if user_query:
 
-                # create context
-                context = "\n\n".join(
-                    doc.page_content for doc in results
-                )
+```
+# save user message
+st.session_state.messages.append(
+    {"role": "user", "content": user_query}
+)
 
-                # prompt
-                prompt = f"""
+with st.chat_message("user"):
+    st.markdown(user_query)
+
+with st.chat_message("assistant"):
+
+    with st.spinner("Searching knowledge base..."):
+
+        try:
+
+            # similarity search
+            docs = vector_store.similarity_search(
+                user_query,
+                k=5
+            )
+
+            # build context
+            context = "\n\n".join(
+                doc.page_content for doc in docs
+            )
+
+            # prompt
+            prompt = f"""
+```
+
 You are a helpful AI assistant.
 
-Answer the question using ONLY the context below.
+Answer ONLY from the provided context.
+
+If answer is not present, say:
+"I could not find this information in the knowledge base."
 
 Context:
 {context}
 
 Question:
-{query}
+{user_query}
 """
 
-                # generate response
-                response = llm.invoke(prompt)
+```
+            # LLM response
+            response = llm.invoke(prompt)
 
-                # display answer
-                st.subheader("Answer")
-                st.write(response.content)
+            answer = response.content
 
-                # optional retrieved chunks
-                with st.expander("Retrieved Context"):
-                    st.write(context)
+            st.markdown(answer)
 
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+            # save assistant response
+            st.session_state.messages.append(
+                {"role": "assistant", "content": answer}
+            )
+
+            # retrieved docs
+            with st.expander("Retrieved Context"):
+                st.write(context)
+
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+```
