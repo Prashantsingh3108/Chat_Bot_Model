@@ -13,7 +13,11 @@ embeddings = HuggingFaceEmbeddings(
     )
 
 #create Vector store
-vector_store =Chroma.from_texts(chunks,embeddings,persist_directory='./chroma_db',embedding_function=embeddings)
+vector_store = Chroma.from_texts(
+    texts=chunks,
+    embedding=embeddings,
+    persist_directory="./chroma_db"
+)
 
 while True:
     query =input("Enter your query :")
